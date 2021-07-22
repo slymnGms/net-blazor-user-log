@@ -1,0 +1,77 @@
+@implements IDisposable
+@inject IAlertService AlertService
+@inject NavigationManager NavigationManager
+
+@foreach (var alert in alerts)
+{
+    <div class="@CssClass(alert)">
+        <a class="close" @onclick="@(()=> RemoveAlert(alert))">&times;</a>
+        <span>@alert.Message</span>
+    </div>
+}
+@code {
+    [Parameter]
+    public string Id { get; set; } = "default-alert";
+    [Parameter]
+    public bool Fade { get; set; } = true;
+    private List<Models.Alert> alerts = new List<Models.Alert>();
+    protected override void OnInitialized()
+    {
+        AlertService.onAlert += OnAlert;
+        NavigationManager.LocationChanged += OnLocationChange;
+    }
+    public void Dispose()
+    {
+        AlertService.onAlert -= OnAlert;
+        NavigationManager.LocationChanged -= OnLocationChange;
+    }
+    public async void OnAlert(Models.Alert model)
+    {
+        if (model.Id == null) return;
+        if (model.Message == null)
+        {
+            alerts.RemoveAll(x => !x.KeepAfterRouteChange);
+            alerts.ForEach(x => x.KeepAfterRouteChange = false);
+        }
+        else
+        {
+            alerts.Add(model);
+            StateHasChanged();
+            if (model.AutoClose)
+            {
+                await Task.Delay(3000);
+                RemoveAlert(model);
+            }
+        }
+        StateHasChanged();
+    }
+    private void OnLocationChange(object sender, LocationChangedEventArgs e){
+        AlertService.Clear(Id);
+    }
+    private async void RemoveAlert(Models.Alert model){
+        if(!alerts.Contains(model)) return;
+        if(Fade){
+            model.Fade=true;
+            await Task.Delay(250);
+            alerts.Remove(model);
+        }
+        else{
+            alerts.Remove(model);
+        }
+        StateHasChanged();
+    }
+
+    private string CssClass(Models.Alert model){
+        if(model==null) return null;
+        var classList=new List<string> {"alert","alert-dismissable","mt-4","container"};
+        var alertTypeClass=new Dictionary<AlertType,string>();
+        alertTypeClass[AlertType.Success] = "alert-success";
+        alertTypeClass[AlertType.Error] = "alert-danger";
+        alertTypeClass[AlertType.Info] = "alert-info";
+        alertTypeClass[AlertType.Warning] = "alert-warning";
+
+        classList.Add(alertTypeClass[model.Type]);
+        if(model.Fade) classList.Add("fade");
+        return String.Join(' ',classList);
+    }
+}
